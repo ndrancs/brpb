@@ -1,0 +1,38 @@
+sudo: required
+services:
+  - docker
+before_install:
+  - docker pull yshalsager/lineageos:14.1
+before_script:
+  - cd $HOME && mkdir pbrp && PATH=~/bin:$PATH
+  - curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+  - chmod a+x ~/bin/repo
+  - cd $HOME/pbrp/
+  - git config --global color.ui false 
+  - repo init --depth=1 -u git://github.com/PitchBlackRecoveryProject/manifest_pb.git -b android-9.0
+  - repo sync
+script:
+  - cd $HOME/pbrp/ && git clone -b android-9.0 https://github.com/ndrancs/twrp_device_xiaomi_sakura.git device/xiaomi/sakura
+  - |
+    docker run --rm -i -e USER_ID=$(id -u) -e GROUP_ID=$(id -g) -v "$(pwd):/home/pbrp/:rw,z" yshalsager/lineageos:14.1 bash << EOF
+    cd /home/pbrp/
+    export ALLOW_MISSING_DEPENDENCIES=true
+    source build/envsetup.sh && lunch omni_sakura-eng && make -j16 recoveryimage
+    exit
+    EOF
+after_success:
+  - cp $HOME/pbrp/out/target/product/sakura/PitchBlack-dipper*.zip $HOME/pbrp/PBRP-sakura-$(date +"%Y%m%d").zip
+
+deploy:
+  skip_cleanup: true
+  provider: releases
+  api_key: "$GITHUB_TOKEN"
+  file_glob: true
+  file: $HOME/pbrp/out/target/product/sakura/PitchBlack*.zip
+  on:
+    tags: false
+    repo: ndrancs/brpb
+    branch: master
+branches:
+  except:
+    - /^(?i:untagged)-.*$/
